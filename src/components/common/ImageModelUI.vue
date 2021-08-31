@@ -69,6 +69,7 @@
               <input
                 style="display: none"
                 type="file"
+                id="input-upload-image"
                 @change="handleFileChange"
               />
             </label>
@@ -388,6 +389,11 @@ export default class ImageModelUI extends Vue {
       if (ctx) {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       }
+    }
+
+    const file = document.getElementById("input-upload-image") as HTMLInputElement;
+    if (file) {
+      file.value = '';
     }
   }
 }

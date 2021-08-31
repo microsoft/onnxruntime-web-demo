@@ -100,6 +100,7 @@
               <input
                 style="display: none"
                 type="file"
+                id="input-upload-image"
                 @change="handleFileChange"
               />
             </label>
@@ -290,6 +291,7 @@ export default class WebcamModelUI extends Vue {
     }
     this.clearRects();
     this.clearCanvas();
+    this.clearFileInput();
     try {
       await this.initSession();
     } catch (e) {
@@ -493,6 +495,13 @@ export default class WebcamModelUI extends Vue {
   clearRects() {
     while (this.webcamContainer.childNodes.length > 2) {
       this.webcamContainer.removeChild(this.webcamContainer.childNodes[2]);
+    }
+  }
+
+  clearFileInput() {
+    const file = document.getElementById("input-upload-image") as HTMLInputElement;
+    if (file) {
+      file.value = '';
     }
   }
 
