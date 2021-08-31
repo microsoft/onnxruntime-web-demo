@@ -6,7 +6,7 @@
       <li
         v-for="info in demoInfo"
         :key="info.path"
-        :class="{ active: currentView === 'resnet50' }"
+        :class="{ active: currentView === 'mobilenet' }"
       >
         <router-link :to="`/${info.path}`">
           <span class="menu-item-heading">{{ info.model }}</span>
@@ -46,11 +46,15 @@
 import { Vue, Component, Prop } from "vue-property-decorator";
 const DEMO_INFO = [
   {
+    model: "MobileNet",
+    title: "MobileNet, trained on ImageNet",
+    path: "mobilenet",
+  },
+  {
     model: "SqueezeNet",
     title: "SqueezeNet, trained on ImageNet",
     path: "squeezenet",
   },
-  { model: "ResNet50", title: "ResNet, trained on ImageNet", path: "resnet50" },
   {
     model: "Emotion FerPlus",
     title: "Emotion FerPlus",

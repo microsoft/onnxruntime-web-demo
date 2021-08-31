@@ -10,26 +10,26 @@ _NOTE: Currently, the supported platforms are Edge/Chrome/Firefox/Electron/Node.
 
 The demo provides four scenarios based on four different ONNX pre-trained deep learning models.
 
-### 1. SqueezeNet
+### 1. MobileNet
 
-[SqueezeNet](https://github.com/onnx/models/tree/master/models/image_classification/squeezenet) is a light-weight convolutional network for image classification. In the demo, you can select or upload an image and see which category it's from in miliseconds.
+[MobileNet](https://github.com/onnx/models/tree/master/vision/classification/mobilenet) models perform image classification - they take images as input and classify the major object in the image into a set of pre-defined classes. They are trained on ImageNet dataset which contains images from 1000 classes. MobileNet models are also very efficient in terms of speed and size and hence are ideal for embedded and mobile applications.
 
-### 2. ResNet-50
+### 2. SqueezeNet
 
-[ResNet-50](https://github.com/onnx/models/tree/master/models/image_classification/resnet) is a highly-accurate deep convolutional network for image classification. It is trained on 1000 pre-defined classes. Similar to the SqueezeNet demo, you can select or upload an image and see which category it's from.
+[SqueezeNet](https://github.com/onnx/models/tree/master/vision/classification/squeezenet) is a light-weight convolutional network for image classification. In the demo, you can select or upload an image and see which category it's from in miliseconds.
 
 ### 3. FER+ Emotion Recognition
 
-[Emotion Ferplus](https://github.com/onnx/models/tree/master/emotion_ferplus)
+[Emotion Ferplus](https://github.com/onnx/models/tree/master/vision/body_analysis/emotion_ferplus)
 is a deep convolutional neural network for emotion recognition in faces. In the demo, you can choose to either select an image with any human face or to start a webcam and see what emotion it's showing.
 
 ### 4. Yolo
 
-[Yolo](https://github.com/onnx/models/tree/master/tiny_yolov2) is a real-time neural network for object detection. It can detect 20 different objects such as person, potted plant and chair. In the demo, you can choose to either select an image or start a webcam to see what objects are in it.
+[Yolo](https://github.com/onnx/models/tree/master/vision/object_detection_segmentation/tiny-yolov2) is a real-time neural network for object detection. It can detect 20 different objects such as person, potted plant and chair. In the demo, you can choose to either select an image or start a webcam to see what objects are in it.
 
 ### 5. MNIST
 
-[MNIST](https://github.com/onnx/models/tree/master/mnist) is a convolutional neural network that predicts handwritten digits. In the demo, you can draw any number on the canvas and the model will tell you what number it is!
+[MNIST](https://github.com/onnx/models/tree/master/vision/classification/mnist) is a convolutional neural network that predicts handwritten digits. In the demo, you can draw any number on the canvas and the model will tell you what number it is!
 
 ## Run ONNX Runtime Web Demo
 

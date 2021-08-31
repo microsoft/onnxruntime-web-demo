@@ -1,5 +1,18 @@
 import {InferenceSession, Tensor} from 'onnxruntime-web';
 
+function init() {
+  // env.wasm.simd = false;
+}
+
+export async function createModelCpu(model: ArrayBuffer): Promise<InferenceSession> {
+  init();
+  return await InferenceSession.create(model, {executionProviders: ['wasm']});
+}
+export async function createModelGpu(model: ArrayBuffer): Promise<InferenceSession> {
+  init();
+  return await InferenceSession.create(model, {executionProviders: ['webgl']});
+}
+
 export async function warmupModel(model: InferenceSession, dims: number[]) {
   // OK. we generate a random input and call Session.run() as a warmup query
   const size = dims.reduce((a, b) => a * b);

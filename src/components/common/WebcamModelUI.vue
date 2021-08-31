@@ -252,14 +252,10 @@ export default class WebcamModelUI extends Vue {
 
     try {
       if (this.sessionBackend === "webgl") {
-        this.gpuSession = await InferenceSession.create(this.modelFile, {
-          executionProviders: [this.sessionBackend],
-        });
+        this.gpuSession = await runModelUtils.createModelGpu(this.modelFile);
         this.session = this.gpuSession;
       } else if (this.sessionBackend === "wasm") {
-        this.cpuSession = await InferenceSession.create(this.modelFile, {
-          executionProviders: [this.sessionBackend],
-        });
+        this.cpuSession = await runModelUtils.createModelCpu(this.modelFile);
         this.session = this.cpuSession;
       }
     } catch (e) {

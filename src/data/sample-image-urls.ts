@@ -1,4 +1,4 @@
-export const RESNET50_IMAGE_URLS = [
+export const MOBILENET_IMAGE_URLS = [
   {text: 'cat', value: 'https://i.imgur.com/CzXTtJV.jpg'},
   {text: 'dog', value: 'https://i.imgur.com/OB0y6MR.jpg'},
   {text: 'cheetah', value: 'https://farm2.staticflickr.com/1533/26541536141_41abe98db3_z_d.jpg'},

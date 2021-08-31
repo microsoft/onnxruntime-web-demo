@@ -29,14 +29,14 @@
 import { Component, Vue } from "vue-property-decorator";
 const DEMO_INFO = [
   {
+    title: "MobileNet, trained on ImageNet",
+    path: "mobilenet",
+    imagePath: require("@/assets/mobilenet.png"),
+  },
+  {
     title: "SqueezeNet, trained on ImageNet",
     path: "squeezenet",
     imagePath: require("@/assets/squeezenet.png"),
-  },
-  {
-    title: "ResNet50, trained on ImageNet",
-    path: "resnet50",
-    imagePath: require("@/assets/resnet50.png"),
   },
   {
     title: "Emotion FerPlus",

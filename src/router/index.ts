@@ -4,7 +4,7 @@ import Router from 'vue-router';
 import Home from '../components/Home.vue';
 import Emotion from '../components/models/Emotion.vue';
 import MNIST from '../components/models/MNIST.vue';
-import Resnet50 from '../components/models/Resnet50.vue';
+import MobileNet from '../components/models/Mobilenet.vue';
 import SqueezeNet from '../components/models/Squeezenet.vue';
 import Yolo from '../components/models/Yolo.vue';
 
@@ -20,8 +20,8 @@ export default new Router({
       component: Home,
     },
     {
-      path: '/resnet50',
-      component: Resnet50,
+      path: '/mobilenet',
+      component: MobileNet,
     },
     {
       path: '/squeezenet',
