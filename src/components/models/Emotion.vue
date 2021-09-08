@@ -122,6 +122,7 @@ export default class Emotion extends Vue {
   ) {
     const rect = document.createElement("div");
     const label = document.createElement("div");
+    rect.style.cssText = `top: 0px;`;
     label.style.cssText = "font-size: 24px";
     label.innerText = text;
     rect.appendChild(label);

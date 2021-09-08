@@ -126,13 +126,16 @@ export default class Yolo extends Vue {
     text = "",
     color = "red"
   ) {
+    const webcamContainerElement = document.getElementById("webcam-container") as HTMLElement;
+    // Depending on the display size, webcamContainerElement might be smaller than 416x416.
+    const [ox, oy] = [(webcamContainerElement.offsetWidth - 416) / 2, (webcamContainerElement.offsetHeight - 416) / 2];
     const rect = document.createElement("div");
-    rect.style.cssText = `top: ${y}px; left: ${x}px; width: ${w}px; height: ${h}px; border-color: ${color};`;
+    rect.style.cssText = `top: ${y+oy}px; left: ${x+ox}px; width: ${w}px; height: ${h}px; border-color: ${color};`;
     const label = document.createElement("div");
     label.innerText = text;
     rect.appendChild(label);
 
-    (document.getElementById("webcam-container") as HTMLElement).appendChild(
+    webcamContainerElement.appendChild(
       rect
     );
   }
