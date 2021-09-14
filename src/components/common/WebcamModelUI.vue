@@ -528,12 +528,12 @@ export default class WebcamModelUI extends Vue {
       this.webcamElement,
       beginWidth,
       beginHeight,
-      this.videoOrigWidth,
-      this.videoOrigHeight,
+      size,
+      size,
       0,
       0,
-      this.webcamElement.width,
-      this.webcamElement.height
+      canvas.width,
+      canvas.height
     );
     return context;
   }
@@ -575,6 +575,7 @@ export default class WebcamModelUI extends Vue {
   height: 416px;
   position: relative;
   display: flex;
+  align-items: center;
   justify-content: center;
   overflow: hidden;
   & :nth-child(n + 3) {
