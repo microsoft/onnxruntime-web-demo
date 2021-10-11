@@ -2,7 +2,7 @@
   "name": "onnxruntime-web-demo",
   "version": "1.0.0",
   "private": true,
-  "main": "electron.js",
+  "main": "main.js",
   "scripts": {
     "prepare": "node post-install.js",
     "serve": "vue-cli-service serve",

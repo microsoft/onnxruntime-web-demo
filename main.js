@@ -7,7 +7,7 @@ const url = require('url');
 let mainWindow = null;
 
 function createWindow() {
-  const WEB_FOLDER = 'dist';
+  const WEB_FOLDER = 'docs';
   const PROTOCOL = 'file';
 
   protocol.interceptFileProtocol(PROTOCOL, (request, callback) => {
