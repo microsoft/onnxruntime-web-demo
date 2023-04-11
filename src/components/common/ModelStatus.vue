@@ -1,29 +1,28 @@
-<template>
-  <v-layout justify-start align-center column class="model-status-background">
-    <div class="model-status">{{ message }}</div>
-    <v-flex>
-      <v-progress-circular
-        v-show="modelLoading | modelInitializing"
-        indeterminate
-        color="primary"
-      />
-    </v-flex>
-  </v-layout>
-</template>
-
 <script lang="ts">
-import { Vue, Component, Prop } from "vue-property-decorator";
+import { defineComponent, ref } from "vue";
 
-@Component
-export default class ModelStatus extends Vue {
-  @Prop({ type: Boolean, required: true }) modelLoading!: boolean;
-  @Prop({ type: Boolean, required: true }) modelInitializing!: boolean;
+export default defineComponent({
+  name:'ModelStatus',
+  props: {
+    modelLoading: { required: true, type: Boolean },
+    modelInitializing: { required: true, type: Boolean },
+  },
 
-  value: number;
-  constructor() {
-    super();
-    this.value = 0;
-  }
+  setup(props) {
+    const value = ref(0);
+    
+    const message = ref(() => {
+      if (props.modelLoading) {
+        return "Loading model...";
+      } else if (props.modelInitializing) {
+        return "Loading model done. Initializing model...";
+      } else {
+        return "";
+      }
+    });
+    
+    return { value, message };
+  },
 
   get message() {
     if (this.modelLoading) {
@@ -34,8 +33,22 @@ export default class ModelStatus extends Vue {
       return "";
     }
   }
-}
+
+})
 </script>
+
+<template>
+  <v-layout justify-start align-center column class="model-status-background">
+    <div class="model-status">{{ message() }}</div>
+    <v-flex>
+      <v-progress-circular
+        v-show="modelLoading || modelInitializing"
+        indeterminate
+        color="primary"
+      />
+    </v-flex>
+  </v-layout>
+</template>
 
 <style scoped lang="postcss">
 @import "../../variables.css";

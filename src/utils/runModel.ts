@@ -5,11 +5,14 @@ function init() {
 }
 
 export async function createModelCpu(model: ArrayBuffer): Promise<InferenceSession> {
+  console.log("prior init");
   init();
+  console.log("prior create wasm");
   return await InferenceSession.create(model, {executionProviders: ['wasm']});
 }
 export async function createModelGpu(model: ArrayBuffer): Promise<InferenceSession> {
   init();
+  console.log("prior create");
   return await InferenceSession.create(model, {executionProviders: ['webgl']});
 }
 
@@ -24,21 +27,26 @@ export async function warmupModel(model: InferenceSession, dims: number[]) {
   try {
     const feeds: Record<string, Tensor> = {};
     feeds[model.inputNames[0]] = warmupTensor;
+    // console.log("prior run");
     await model.run(feeds);
+    // console.log("after run");
   } catch (e) {
     console.error(e);
   }
 }
 
-export async function runModel(model: InferenceSession, preprocessedData: Tensor): Promise<[Tensor, number]> {
+export async function runModel(
+  model: InferenceSession | undefined,
+  preprocessedData: Tensor
+): Promise<[Tensor, number]> {
   const start = new Date();
   try {
     const feeds: Record<string, Tensor> = {};
-    feeds[model.inputNames[0]] = preprocessedData;
-    const outputData = await model.run(feeds);
+    feeds[model!.inputNames[0]] = preprocessedData;
+    const outputData = await model!.run(feeds);
     const end = new Date();
     const inferenceTime = (end.getTime() - start.getTime());
-    const output = outputData[model.outputNames[0]];
+    const output = outputData[model!.outputNames[0]];
 
     return [output, inferenceTime];
   } catch (e) {

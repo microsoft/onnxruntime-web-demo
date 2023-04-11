@@ -10,13 +10,15 @@
       <v-layout
         justify-center
         align-center
-        style="margin: auto; width: 40%; padding: 40px"
+        style="align-self: center; margin: auto; width: 50%; margin-left: 25%; padding: 40px;border-radius: 12px;"
       >
-        <div class="select-backend">Select Backend:</div>
+        <div class="select-backend" style="align-self: center;">Select Backend:</div>
         <v-select
           v-model="sessionBackend"
           :disabled="modelLoading || modelInitializing || sessionRunning"
           :items="backendSelectList"
+          item-title="text"
+          item-value="value"
           label="Switch Backend"
           :menu-props="{ maxHeight: '750' }"
           solo
@@ -42,6 +44,7 @@
             id="input-canvas"
             width="416"
             height="416"
+            willReadFrequently="true"
             style="position: absolute"
             v-show="!webcamEnabled"
           ></canvas>
@@ -67,7 +70,7 @@
             <div v-if="imageLoadingError" class="error-message">
               Error loading URL
             </div>
-            <div style="width: 70%">
+            <div style="width: 100%">
               <v-select
                 v-model="imageURLSelect"
                 :items="imageUrls"
@@ -77,6 +80,8 @@
                   modelLoadingError ||
                   webcamEnabled
                 "
+                item-title="text"
+                item-value="value"
                 label="Select image"
                 :menu-props="{ maxHeight: '750' }"
                 solo
@@ -85,7 +90,7 @@
               ></v-select>
             </div>
           </div>
-          <v-card-text>or</v-card-text>
+          <v-card-text style="align-self: center; justify-content: center; font-size: large; margin-top: 20%;">or</v-card-text>
           <div
             :disabled="
               modelLoading ||
@@ -98,21 +103,21 @@
             <label class="inputs">
               UPLOAD IMAGE
               <input
-                style="display: none"
+                style="display:none; margin: 0; width: 100%"
+                hide-details
                 type="file"
                 id="input-upload-image"
                 @change="handleFileChange"
               />
             </label>
           </div>
-          <v-card-text>or</v-card-text>
-
+          <v-card-text style="align-self: center; justify-content: center; font-size: large; margin-top: 20%;">or</v-card-text>
           <v-btn
-            style="margin: 0; width: 30%"
-            v-on:click="webcamController"
+            style="margin: 0; width: 100%; border-radius: 12px;"
+            v-on:click="webcamController()"
             :disabled="modelLoadingError"
           >
-            {{ webcamStatus }}
+            {{ webcamStatus() }}
           </v-btn>
         </v-flex>
       </v-layout>
@@ -130,428 +135,465 @@
  * https://github.com/ModelDepot/tfjs-yolo-tiny-demo/blob/master/src/webcam.js
  */
 
-import { InferenceSession, Tensor } from "onnxruntime-web";
-import { Vue, Component, Prop, Watch } from "vue-property-decorator";
+import type { InferenceSession, Tensor } from "onnxruntime-web";
+
+import {
+  watch,
+  defineComponent,
+  ref,
+  nextTick,
+  onMounted,
+  onBeforeMount,
+} from "vue";
+import type { PropType } from "vue";
+
 import loadImage from "blueimp-load-image";
-import ModelStatus from "../common/ModelStatus.vue";
+import modelStatus from "../common/ModelStatus.vue";
 import { runModelUtils } from "../../utils";
 
-@Component({
+// export default class WebcamModelUI extends Vue {
+export default defineComponent({
+  name:'WebcamModelUI',
+  
   components: {
-    ModelStatus,
+    modelStatus,
   },
-})
-export default class WebcamModelUI extends Vue {
-  @Prop(Boolean) hasWebGL!: boolean;
-  @Prop({ type: String, required: true }) modelFilepath!: string;
-  @Prop({ type: Number, required: true }) imageSize!: number;
-  @Prop({ type: Array, required: true }) imageUrls!: Array<{
-    text: string;
-    value: string;
-  }>;
-  @Prop({ type: Function, required: true }) warmupModel!: (
-    session: InferenceSession
-  ) => Promise<void>;
-  @Prop({ type: Function, required: true }) preprocess!: (
-    ctx: CanvasRenderingContext2D
-  ) => Tensor;
-  @Prop({ type: Function, required: true }) postprocess!: (
-    t: Tensor,
-    inferenceTime: number
-  ) => void;
 
-  webcamElement: HTMLVideoElement;
-  videoOrigWidth: number;
-  videoOrigHeight: number;
-  webcamContainer: HTMLElement;
-  inferenceTime: number;
-  session: InferenceSession;
-  gpuSession: InferenceSession | undefined;
-  cpuSession: InferenceSession | undefined;
+  props: {
+    hasWebGL: {
+      type: Boolean,
+      required: true,
+    },
+    modelFilepath: {
+      type: String,
+      required: true,
+    },
+    imageSize: {
+      type: Number,
+      required: true,
+    },
+    imageUrls: {
+      type: Array as PropType<Array<{ text: string; value: string }>>,
+      required: true,
+    },
+    warmupModel: {
+      type: Function as PropType<(session: InferenceSession) => Promise<void>>,
+      required: true,
+    },
+    preprocess: {
+      type: Function as PropType<(ctx: CanvasRenderingContext2D) => Tensor>,
+      required: true,
+    },
+    postprocess: {
+      type: Function as PropType<(t: Tensor, inferenceTime: number) => void>,
+      required: true,
+    },
+  },
 
-  modelLoading: boolean;
-  modelInitializing: boolean;
-  sessionRunning: boolean;
-  modelLoadingError: boolean;
+  setup(props, { emit }){
+    let webcamElement: HTMLVideoElement | undefined;
+    let videoOrigWidth: number = 0;
+    let videoOrigHeight: number = 0;
+    let webcamContainer: HTMLElement | null = null;
+    let inferenceTime = ref(0);
+    let session: InferenceSession | undefined;
+    let gpuSession: InferenceSession | undefined;
+    let cpuSession: InferenceSession | undefined;
 
-  imageURLInput: string;
-  imageURLSelect: null;
-  imageURLSelectList: Array<{ text: string; value: string }>;
-  imageLoading: boolean;
-  imageLoadingError: boolean;
+    let modelLoading = ref(true);
+    let modelInitializing = ref(true);
+    let sessionRunning = ref(false);
+    let modelLoadingError = ref(false);
 
-  webcamEnabled: boolean;
-  webcamInitialized: boolean;
-  webcamStream: MediaStream;
+    let imageURLInput: string | null = "";
+    let imageURLSelect = ref("" as string | null);
+    let imageLoading = ref(false);
+    let imageLoadingError = ref(false);
 
-  sessionBackend: string;
-  modelFile: ArrayBuffer;
-  backendSelectList: Array<{ text: string; value: string }>;
+    let webcamEnabled = ref(false)
+    let webcamInitialized = ref(false);
+    let webcamStream: MediaStream = new MediaStream();
 
-  constructor() {
-    super();
-    this.inferenceTime = 0;
-    this.imageURLInput = "";
-    this.imageURLSelect = null;
-    this.imageURLSelectList = this.imageUrls;
-    this.imageLoading = false;
-    this.imageLoadingError = false;
-
-    this.modelLoading = true;
-    this.modelInitializing = true;
-    this.sessionRunning = false;
-    this.modelLoadingError = false;
-
-    this.webcamEnabled = false;
-    this.webcamInitialized = false;
-
-    this.sessionBackend = "webgl";
-    this.modelFile = new ArrayBuffer(0);
-    this.backendSelectList = [
+    let sessionBackend = ref("webgl");
+    let modelFile: ArrayBuffer = new ArrayBuffer(0);
+    let backendSelectList: Array<{ text: string; value: string }> = [
       { text: "GPU-WebGL", value: "webgl" },
       { text: "CPU-WebAssembly", value: "wasm" },
     ];
-  }
 
-  async mounted() {
-    this.webcamElement = document.getElementById("webcam") as HTMLVideoElement;
-    this.webcamContainer = document.getElementById(
-      "webcam-container"
-    ) as HTMLElement;
-  }
+    onMounted(() => {
+      webcamElement = document.getElementById("webcam") as HTMLVideoElement;
+      webcamContainer = document.getElementById(
+        "webcam-container"
+      ) as HTMLElement;
+    });
 
-  async created() {
-    // fetch the model file to be used later
-    const response = await fetch(this.modelFilepath);
-    this.modelFile = await response.arrayBuffer();
-    try {
-      await this.initSession();
-    } catch (e) {
-      this.sessionBackend = "wasm";
-    }
-  }
-
-  async initSession() {
-    this.sessionRunning = false;
-    this.modelLoadingError = false;
-    if (this.sessionBackend === "webgl") {
-      if (this.gpuSession) {
-        this.session = this.gpuSession;
-        return;
+    onBeforeMount(() => {
+      stopCamera();
+      if (webcamInitialized.value) {
+        webcamStream.getTracks()[0].stop();
       }
-      this.modelLoading = true;
-      this.modelInitializing = true;
-    }
-    if (this.sessionBackend === "wasm") {
-      if (this.cpuSession) {
-        this.session = this.cpuSession;
-        return;
-      }
-      this.modelLoading = true;
-      this.modelInitializing = true;
-    }
+    });
 
-    try {
-      if (this.sessionBackend === "webgl") {
-        this.gpuSession = await runModelUtils.createModelGpu(this.modelFile);
-        this.session = this.gpuSession;
-      } else if (this.sessionBackend === "wasm") {
-        this.cpuSession = await runModelUtils.createModelCpu(this.modelFile);
-        this.session = this.cpuSession;
+    async function initSession() {
+      sessionRunning.value = false;
+      modelLoadingError.value = false;
+      if (sessionBackend.value === "webgl") {
+        if (gpuSession) {
+          session = gpuSession;
+          return;
+        }
+        modelLoading.value = true;
+        modelInitializing.value = true;
       }
-    } catch (e) {
-      this.modelLoading = false;
-      this.modelInitializing = false;
-      if (this.sessionBackend === "webgl") {
-        this.gpuSession = undefined;
+      if (sessionBackend.value === "wasm") {
+        if (cpuSession) {
+          session = cpuSession;
+          return;
+        }
+        modelLoading.value = true;
+        modelInitializing.value = true;
+      }
+
+      try {
+        if (sessionBackend.value === "webgl") {
+          gpuSession = await runModelUtils.createModelGpu(modelFile);
+          session = gpuSession;
+        } else if (sessionBackend.value === "wasm") {
+          cpuSession = await runModelUtils.createModelCpu(modelFile);
+          session = cpuSession;
+        }
+      } catch (e) {
+        modelLoading.value = false;
+        modelInitializing.value = false;
+        if (sessionBackend.value === "webgl") {
+          gpuSession = undefined;
+        } else {
+          cpuSession = undefined;
+        }
+        throw new Error("Error: Backend not supported. ");
+      }
+      modelLoading.value = false;
+      // warm up session with a sample tensor. Use setTimeout(..., 0) to make it an async execution so
+      // that UI update can be done.
+      if (sessionBackend.value === "webgl") {
+        setTimeout(() => {
+          props.warmupModel(session!);
+          modelInitializing.value = false;
+        }, 0);
       } else {
-        this.cpuSession = undefined;
+        await props.warmupModel(session!);
+        modelInitializing.value = false;
       }
-      throw new Error("Error: Backend not supported. ");
     }
-    this.modelLoading = false;
-    // warm up session with a sample tensor. Use setTimeout(..., 0) to make it an async execution so
-    // that UI update can be done.
-    if (this.sessionBackend === "webgl") {
-      setTimeout(() => {
-        this.warmupModel(this.session!);
-        this.modelInitializing = false;
-      }, 0);
-    } else {
-      await this.warmupModel(this.session!);
-      this.modelInitializing = false;
-    }
-  }
 
-  @Watch("sessionBackend")
-  async onSessionBackendChange(newVal: string) {
-    this.sessionBackend = newVal;
-    if (this.webcamEnabled) {
-      this.stopCamera();
+    async function init() {
+      // fetch the model file to be used later
+      const response = await fetch(props.modelFilepath);
+      modelFile = await response.arrayBuffer();
+      try {
+        await initSession();
+      } catch (e) {
+        sessionBackend.value = "wasm";
+      }
     }
-    this.clearRects();
-    this.clearCanvas();
-    this.clearFileInput();
-    try {
-      await this.initSession();
-    } catch (e) {
-      this.modelLoadingError = true;
+
+    function clearRects() {
+      console.log("clearRects");
+      // console.log("webcam child length -", webcamContainer!.childNodes!.length);
+      while (
+        webcamContainer !== null &&
+        webcamContainer.childNodes!.length > 2
+      ) {
+        console.log("clearRects - removing child");
+        webcamContainer.removeChild(webcamContainer.childNodes[2]);
+      }
     }
-    return newVal;
-  }
 
-  @Watch("imageURLSelect")
-  onImageURLSelectChange(newVal: string) {
-    if (this.webcamEnabled) {
-      this.stopCamera();
+    function clearFileInput() {
+      const file = document.getElementById("input-upload-image") as HTMLInputElement;
+      if (file) {
+        file.value = '';
+      }
     }
-    this.imageURLInput = newVal;
-    this.clearRects();
-    this.loadImageToCanvas(newVal);
-  }
 
-  handleFileChange(e: any) {
-    this.$emit("input", e.target.files[0]);
-    this.loadImageToCanvas(e.target.files[0]);
-  }
+    // Capture image from video
+    function capture(): CanvasRenderingContext2D {
+      const size = Math.min(videoOrigWidth, videoOrigHeight);
+      const centerHeight = videoOrigHeight / 2;
+      const beginHeight = centerHeight - size / 2;
+      const centerWidth = videoOrigWidth / 2;
+      const beginWidth = centerWidth - size / 2;
 
-  get webcamStatus() {
-    if (this.webcamEnabled) {
-      return "Stop Camera";
-    } else {
-      return "Start Camera";
+      // placeholder to draw a image
+      const canvas = document.getElementById("screenshot") as HTMLCanvasElement;
+      canvas.width = Math.min(webcamElement!.width, webcamElement!.height);
+      canvas.height = Math.min(webcamElement!.width, webcamElement!.height);
+      const context = canvas.getContext("2d") as CanvasRenderingContext2D;
+      context.drawImage(
+        webcamElement!,
+        beginWidth,
+        beginHeight,
+        size,
+        size,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      return context;
     }
-  }
 
-  beforeDestroy() {
-    this.stopCamera();
-    if (this.webcamInitialized) {
-      this.webcamStream.getTracks()[0].stop();
+    async function stopCamera() {
+      if (webcamElement === undefined) return;
+      webcamElement.pause();
+      while (sessionRunning.value) {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve())
+        );
+      }
+      clearRects();
+      clearCanvas();
+      webcamEnabled.value = false;
     }
-  }
 
-  webcamController() {
-    if (this.webcamEnabled) {
-      this.stopCamera();
-    } else {
-      this.clearRects();
-      this.runLiveVideo();
-    }
-  }
-
-  loadImageToCanvas(url: string) {
-    if (!url) {
+    function clearCanvas() {
+      inferenceTime.value = 0;
+      imageURLInput = "";
+      imageURLSelect.value = null;
+      imageLoading.value = false;
+      imageLoadingError.value = false;
       const element = document.getElementById(
         "input-canvas"
       ) as HTMLCanvasElement;
-      const ctx = element.getContext("2d") as CanvasRenderingContext2D;
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      return;
-    }
-    loadImage(
-      url,
-      (img) => {
-        if ((img as Event).type === "error") {
-          this.imageLoadingError = true;
-          this.imageLoading = false;
-        } else {
-          // load image data onto input canvas
-          const element = document.getElementById(
-            "input-canvas"
-          ) as HTMLCanvasElement;
-          const ctx = element.getContext("2d") as CanvasRenderingContext2D;
-          const imageWidth = (img as HTMLImageElement).width;
-          const imageHeight = (img as HTMLImageElement).height;
-          ctx.drawImage(
-            img as HTMLImageElement,
-            0,
-            0,
-            imageWidth,
-            imageHeight,
-            0,
-            0,
-            element.width,
-            element.height
-          );
-          this.imageLoadingError = false;
-          this.imageLoading = false;
-          this.sessionRunning = true;
-          this.inferenceTime = 0;
-          // model predict
-          this.$nextTick(function () {
-            setTimeout(() => {
-              this.runModel(ctx);
-            }, 10);
-          });
+      if (element) {
+        const ctx = element.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         }
-      },
-      {
-        cover: true,
-        crop: true,
-        canvas: true,
-        crossOrigin: "Anonymous",
       }
-    );
-  }
-
-  async setup() {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: "environment" },
-      });
-      this.webcamStream = stream;
-      this.webcamElement.srcObject = stream;
-      return new Promise<void>((resolve) => {
-        this.webcamElement.onloadedmetadata = () => {
-          this.videoOrigWidth = this.webcamElement.videoWidth;
-          this.videoOrigHeight = this.webcamElement.videoHeight;
-          this.adjustVideoSize(this.videoOrigWidth, this.videoOrigHeight);
-          resolve();
-        };
-      });
-    } else {
-      throw new Error("No webcam found!");
     }
-  }
 
-  async stopCamera() {
-    this.webcamElement.pause();
-    while (this.sessionRunning) {
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve())
-      );
-    }
-    this.clearRects();
-    this.clearCanvas();
-    this.webcamEnabled = false;
-  }
-
-  async startCamera() {
-    if (!this.webcamInitialized) {
-      this.sessionRunning = true;
-      try {
-        await this.setup();
-      } catch (e) {
-        this.sessionRunning = false;
-        this.webcamEnabled = false;
-        alert("no webcam found");
+    function loadImageToCanvas(url: string | null) {
+      if (!url && url === null) {
+        const element = document.getElementById(
+          "input-canvas"
+        ) as HTMLCanvasElement;
+        const ctx = element.getContext("2d") as CanvasRenderingContext2D;
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         return;
       }
-      this.webcamElement.play();
-      this.webcamInitialized = true;
-      this.sessionRunning = false;
-    } else {
-      await this.webcamElement.play();
-    }
-    this.webcamEnabled = true;
-  }
-
-  async runLiveVideo() {
-    await this.startCamera();
-    if (!this.webcamEnabled) {
-      return;
-    }
-    while (this.webcamEnabled) {
-      const ctx = this.capture();
-      // run model
-      await this.runModel(ctx);
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve())
+      loadImage(
+        url,
+        (img) => {
+          if ((img as Event).type === "error") {
+            imageLoadingError.value = true;
+            imageLoading.value = false;
+          } else {
+            // load image data onto input canvas
+            const element = document.getElementById(
+              "input-canvas"
+            ) as HTMLCanvasElement;
+            const ctx = element.getContext("2d") as CanvasRenderingContext2D;
+            const imageWidth = (img as HTMLImageElement).width;
+            const imageHeight = (img as HTMLImageElement).height;
+            ctx.drawImage(
+              img as HTMLImageElement,
+              0,
+              0,
+              imageWidth,
+              imageHeight,
+              0,
+              0,
+              element.width,
+              element.height
+            );
+            imageLoadingError.value = false;
+            imageLoading.value = false;
+            sessionRunning.value = true;
+            inferenceTime.value = 0;
+            // model predict
+            nextTick(function () {
+              setTimeout(() => {
+                runModel(ctx);
+              }, 10);
+            });
+          } 
+        },
+        {
+          cover: true,
+          crop: true,
+          canvas: true,
+          crossOrigin: "Anonymous",
+        }
       );
     }
-  }
 
-  async runModel(ctx: CanvasRenderingContext2D) {
-    this.sessionRunning = true;
-    const data = this.preprocess(ctx);
-    let outputTensor: Tensor;
-    [outputTensor, this.inferenceTime] = await runModelUtils.runModel(
-      this.session,
-      data
-    );
-    this.clearRects();
-    this.postprocess(outputTensor, this.inferenceTime);
-    this.sessionRunning = false;
-  }
+    watch(imageURLSelect, (newURL: string | null) => {
+      if (webcamEnabled.value) {
+        stopCamera();
+      }
+      console.log("imageURLSelect watch");
+      imageURLInput = newURL;
+      clearRects();
+      loadImageToCanvas(newURL);
+    });
 
-  clearCanvas() {
-    this.inferenceTime = 0;
-    this.imageURLInput = "";
-    this.imageURLSelect = null;
-    this.imageLoading = false;
-    this.imageLoadingError = false;
-    const element = document.getElementById(
-      "input-canvas"
-    ) as HTMLCanvasElement;
-    if (element) {
-      const ctx = element.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    watch(sessionBackend, async (newVal: string) => {
+      sessionBackend.value = newVal;
+      if (webcamEnabled.value) {
+        stopCamera();
+      }
+      clearRects();
+      clearCanvas();
+      clearFileInput();
+      try {
+        await  initSession();
+      } catch (e) {
+        modelLoadingError.value = true;
+      }
+      return newVal;
+    });
+
+    function webcamController() {
+      if (webcamEnabled.value) {
+        stopCamera();
+      } else {
+        clearRects();
+        runLiveVideo();
       }
     }
-  }
 
-  clearRects() {
-    while (this.webcamContainer.childNodes.length > 2) {
-      this.webcamContainer.removeChild(this.webcamContainer.childNodes[2]);
+    async function startCamera() {
+      if (!webcamInitialized.value) {
+        sessionRunning.value = true;
+        try {
+          await cameraSetup();
+        } catch (e) {
+          sessionRunning.value = false;
+          webcamEnabled.value = false;
+          alert("no webcam found");
+          return;
+        }
+        webcamElement!.play();
+        webcamInitialized.value = true;
+        sessionRunning.value = false;
+      } else {
+        await webcamElement!.play();
+      }
+      webcamEnabled.value = true;
     }
-  }
 
-  clearFileInput() {
-    const file = document.getElementById("input-upload-image") as HTMLInputElement;
-    if (file) {
-      file.value = '';
+    async function runLiveVideo() {
+      await startCamera();
+      if (!webcamEnabled.value) {
+        return;
+      }
+      while (webcamEnabled.value) {
+        const ctx =  capture();
+        // run model
+        await runModel(ctx);
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve())
+        );
+      }
     }
-  }
 
-  // Capture image from video
-  capture(): CanvasRenderingContext2D {
-    const size = Math.min(this.videoOrigWidth, this.videoOrigHeight);
-    const centerHeight = this.videoOrigHeight / 2;
-    const beginHeight = centerHeight - size / 2;
-    const centerWidth = this.videoOrigWidth / 2;
-    const beginWidth = centerWidth - size / 2;
-
-    // placeholder to draw a image
-    const canvas = document.getElementById("screenshot") as HTMLCanvasElement;
-    canvas.width = Math.min(
-      this.webcamElement.width,
-      this.webcamElement.height
-    );
-    canvas.height = Math.min(
-      this.webcamElement.width,
-      this.webcamElement.height
-    );
-    const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-    context.drawImage(
-      this.webcamElement,
-      beginWidth,
-      beginHeight,
-      size,
-      size,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-    return context;
-  }
-  /**
-   * Adjusts the video size so we can make a centered square crop without
-   * including whitespace.
-   * @param {number} width The real width of the video element.
-   * @param {number} height The real height of the video element.
-   */
-  adjustVideoSize(width: number, height: number) {
-    const aspectRatio = width / height;
-    if (width >= height) {
-      this.webcamElement.width = aspectRatio * this.webcamElement.height;
-    } else if (width < height) {
-      this.webcamElement.height = this.webcamElement.width / aspectRatio;
+    async function runModel(ctx: CanvasRenderingContext2D) {
+      sessionRunning.value = true;
+      const data = props.preprocess(ctx);
+      let outputTensor: Tensor;
+      [outputTensor,  inferenceTime.value] = await runModelUtils.runModel(
+        session,
+        data
+      );
+      clearRects();
+      props.postprocess(outputTensor,  inferenceTime.value);
+      sessionRunning.value = false;
     }
-  }
-}
+
+    /**
+     * Adjusts the video size so we can make a centered square crop without
+     * including whitespace.
+     * @param {number} width The real width of the video element.
+     * @param {number} height The real height of the video element.
+     */
+    function adjustVideoSize(width: number, height: number) {
+      if(!webcamElement) return;
+      const aspectRatio = width / height;
+      if (width >= height) {
+        webcamElement.width = aspectRatio *  webcamElement.height;
+      } else if (width < height) {
+        webcamElement.height =  webcamElement.width / aspectRatio;
+      }
+    }
+
+    async function cameraSetup() {
+      if(!webcamElement) return;
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: "environment" },
+        });
+        webcamStream = stream;
+        webcamElement.srcObject = stream;
+        return new Promise<void>((resolve) => {
+          webcamElement!.onloadedmetadata = () => {
+            videoOrigWidth =  webcamElement!.videoWidth;
+            videoOrigHeight =  webcamElement!.videoHeight;
+            adjustVideoSize( videoOrigWidth,  videoOrigHeight);
+            resolve();
+          };
+        });
+      } else {
+        throw new Error("No webcam found!");
+      }
+    }
+
+    function webcamStatus() {
+      if (webcamEnabled.value) {
+        return "Stop Camera";
+      } else {
+        return "Start Camera";
+      }
+    }
+
+    function handleFileChange(e: any) {
+      emit("input", e.target.files[0]);
+      loadImageToCanvas(e.target.files[0]);
+    }
+
+    init();
+
+    return{
+      webcamElement,
+      videoOrigWidth,
+      videoOrigHeight,
+      webcamContainer,
+      inferenceTime,
+      session,
+      gpuSession,
+      cpuSession,
+      modelLoading,
+      modelInitializing,
+      sessionRunning,
+      modelLoadingError,
+      imageURLInput,
+      imageURLSelect,
+      imageLoading,
+      imageLoadingError,
+      webcamEnabled,
+      webcamInitialized,
+      webcamStream,
+      sessionBackend,
+      modelFile,
+      backendSelectList,
+      webcamStatus,
+      webcamController,
+      handleFileChange,
+    }
+  }, 
+});
 </script>
 
 <style lang="postcss" scoped>
@@ -563,6 +605,8 @@ export default class WebcamModelUI extends Vue {
 }
 .webcam-panel {
   padding: 40px 20px;
+  width: 70%;
+  margin-left: 20%;
   margin-top: 30px;
   background-color: white;
   position: relative;
@@ -570,13 +614,13 @@ export default class WebcamModelUI extends Vue {
 .webcam-container {
   border-radius: 5px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-  margin: 0 auto;
+  margin: auto;
   width: 416px;
   height: 416px;
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: left;
   overflow: hidden;
   & :nth-child(n + 3) {
     position: absolute;
@@ -594,19 +638,19 @@ export default class WebcamModelUI extends Vue {
   }
 }
 .inputs {
-  margin: auto;
   background: #f5f5f5;
   box-shadow: 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 2px 2px 0 rgba(0, 0, 0, 0.14),
     0 1px 5px 0 rgba(0, 0, 0, 0.12);
-  align-items: center;
-  border-radius: 2px;
+  border-radius: 12px;
   display: inline-flex;
-  width: 100%;
-  height: 38px;
+  height: 40px;
+  width: 180px;
+  align-items: center;
+  justify-content: center;
   font-size: 14px;
   transition: 0.3s cubic-bezier(0.25, 0.8, 0.5, 1), color 1ms;
-  justify-content: center;
-  padding: 0 16px;
+  padding: 0 0px;
+  margin: 0 20px;
 }
 
 .inputs:focus,

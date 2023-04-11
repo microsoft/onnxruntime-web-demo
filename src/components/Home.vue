@@ -1,16 +1,15 @@
 <template>
   <div class="demo home text-xs-center">
-    <v-img class="banner" :src="require('@/assets/background.png')">
-      <v-container class="onnx-wrapper">
-        <v-layout column justify-center align-center>
-          <v-flex class="onnx">ONNX Runtime Web</v-flex>
-          <v-flex class="run-onnx">Run ONNX model in the browser</v-flex>
-          <v-flex class="onnx-info"
+    <v-img class="banner" :src="getImageSource()">
+      <v-container class="onnx-wrapper" >
+        <v-layout class="onnx-page" >
+          <v-slot class="onnx">ONNX Runtime Web</v-slot>
+          <v-slot class="run-onnx">Run ONNX model in the browser</v-slot>
+          <v-slot class="onnx-info"
             >Interactive ML without install and device independent<br />
             Latency of server-client communication reduced<br />
             Privacy and security ensured<br />
-            GPU acceleration</v-flex
-          >
+            GPU acceleration</v-slot>
         </v-layout>
       </v-container>
     </v-img>
@@ -26,37 +25,52 @@
 </template>
 
 <script lang="ts">
-import { Component, Vue } from "vue-property-decorator";
+
+import { defineComponent } from "vue";
 const DEMO_INFO = [
   {
     title: "MobileNet, trained on ImageNet",
     path: "mobilenet",
-    imagePath: require("@/assets/mobilenet.png"),
+    imagePath: "./src/assets/mobilenet.png",
   },
   {
     title: "SqueezeNet, trained on ImageNet",
     path: "squeezenet",
-    imagePath: require("@/assets/squeezenet.png"),
+    imagePath: "./src/assets/squeezenet.png",
   },
   {
-    title: "Emotion FerPlus",
-    path: "emotion_ferplus",
-    imagePath: require("@/assets/emotion.png"),
+    title: "MNIST",
+    path: "MNIST",
+    imagePath: "./src/assets/mnist.png",
   },
-  { title: "Yolo", path: "yolo", imagePath: require("@/assets/yolo.png") },
-  { title: "MNIST", path: "mnist", imagePath: require("@/assets/mnist.png") },
+  {
+    title: "YoLo",
+    path: "YoLo",
+    imagePath: "./src/assets/yolo.png",
+  },
+  {
+    title: "Emotion Recognition",
+    path: "emotion",
+    imagePath: "./src/assets/emotion.png",
+  },
 ];
 
-@Component
-export default class HomePage extends Vue {
-  demoInfo: Array<{ title: string; path: string; imagePath: string }> =
-    DEMO_INFO;
+export default defineComponent({
+  name: 'HomePage',
+  setup() {
+    let demoInfo: Array<{ title: string; path: string; imagePath: string }> =
+      DEMO_INFO;
+    
+    function getImageSource(): string{
+      return '/src/assets/background.png';
+    };
 
-  constructor() {
-    super();
-    this.demoInfo = DEMO_INFO;
-  }
-}
+    return {
+      demoInfo,
+      getImageSource,
+    };
+  },
+});
 </script>
 
 <style scoped lang="postcss">
@@ -105,23 +119,24 @@ export default class HomePage extends Vue {
 .demo-card a {
   display: flex;
   align-items: center;
+  height: 90px;
+  width: 100%;
 }
 
 .demo-card-heading {
-  color: var(--color-lightgray);
-  flex: 1;
-  font-size: 1.1em;
+  color: var(--color-blue);
+  flex: 100%;
+  font-size: 1.3em;
   transition: color 0.2s ease-out;
   text-align: center;
 }
 
 .demo-card-image {
-  height: 90px;
-
-  & img {
-    width: auto;
-    height: 100%;
-  }
+  overflow: hidden;
+  display: flex;
+  justify-content: right;
+  object-fit: contain;  
+  height: 100%;
 }
 
 .banner {
@@ -143,8 +158,16 @@ export default class HomePage extends Vue {
 
 .onnx-info {
   font-family: var(--font-sans-serif-regular);
-  font-size: 1em;
-  margin-top: 5rem;
+  font-size: 0.8em;
+  margin-top: 3.5rem;
+}
+
+.onnx-page {
+  height: 100%;
+  text-align: center;
+  text-justify: auto;
+  align-items: center;
+  flex-direction: column;
 }
 
 @media (max-width: 500px) {
@@ -195,4 +218,3 @@ export default class HomePage extends Vue {
   }
 }
 </style>
-

@@ -1,22 +1,26 @@
 <template>
-  <div>
-    <model-status
+    <div>
+    <modelStatus
       v-if="modelLoading || modelInitializing"
       :modelLoading="modelLoading"
       :modelInitializing="modelInitializing"
-    ></model-status>
-    <v-container fluid>
+    ></modelStatus>
+    <v-container fluid style="margin-left: 25%; width: 50%; padding: 30px">
       <!-- Utility bar to select session backend configs. -->
       <v-layout
         justify-center
         align-center
-        style="margin: auto; width: 40%; padding: 40px"
+        style="margin: auto; width: 100%; padding: 40px"
       >
-        <div class="select-backend">Select Backend:</div>
+        <div class="select-backend" style="align-self: center">
+          Select Backend:
+        </div>
         <v-select
           v-model="sessionBackend"
           :disabled="modelLoading || modelInitializing || sessionRunning"
           :items="backendSelectList"
+          item-title="text"
+          item-value="value"
           label="Switch Backend"
           :menu-props="{ maxHeight: '750' }"
           solo
@@ -55,7 +59,6 @@
                   @mouseleave="run"
                   @mousemove="draw"
                   @touchstart="activateDraw"
-                  @touchend="run"
                   @touchmove="draw"
                 ></canvas>
               </div>
@@ -68,13 +71,12 @@
             </v-layout>
           </div>
         </v-flex>
-
         <v-flex sm6 md4>
           <div class="output-column">
             <div class="output">
               <div
                 class="output-class"
-                :class="{ predicted: i === predictedClass }"
+                :class="{ predicted: i === predictedClass() }"
                 v-for="i in outputClasses"
                 :key="`output-class-${i}`"
               >
@@ -95,228 +97,248 @@
 <script lang='ts'>
 import _ from "lodash";
 import { mathUtils, runModelUtils } from "../../utils";
-import { Vue, Component, Prop, Watch } from "vue-property-decorator";
-import { Tensor, InferenceSession } from "onnxruntime-web";
-import ModelStatus from "../common/ModelStatus.vue";
 
-@Component({
+import type { Tensor, InferenceSession } from "onnxruntime-web";
+import modelStatus from "./ModelStatus.vue";
+import { watch, ref, defineComponent } from "vue";
+import type { PropType } from "vue";
+
+export default defineComponent({
+  name: "DrawingModelUI",
   components: {
-    ModelStatus,
+    modelStatus,
   },
-})
-export default class DrawingModelUI extends Vue {
-  @Prop({ type: String, required: true }) modelFilepath!: string;
-  @Prop({ type: Function, required: true }) preprocess!: (
-    ctx: CanvasRenderingContext2D
-  ) => Tensor;
-  @Prop({ type: Function, required: true }) postprocess!: (
-    t: Tensor
-  ) => Float32Array;
-  @Prop({ type: Function, required: true }) getPredictedClass!: (
-    output: Float32Array
-  ) => number;
 
-  modelLoading: boolean;
-  modelInitializing: boolean;
-  modelLoadingError: boolean;
-  sessionRunning: boolean;
-  input: Float32Array;
-  output: Float32Array;
-  outputClasses: number[];
-  drawing: boolean;
-  strokes: number[][][];
-  inferenceTime: number;
-  session: InferenceSession;
-  gpuSession: InferenceSession | undefined;
-  cpuSession: InferenceSession | undefined;
-  sessionBackend: string;
-  modelFile: ArrayBuffer;
-  backendSelectList: Array<{ text: string; value: string }>;
+  props: {
+    modelFilepath: { type: String, required: true },
+    preprocess: {
+      type: Function as PropType<(ctx: CanvasRenderingContext2D) => Tensor>,
+      required: true,
+    },
+    postprocess: {
+      type: Function as PropType<(t: Tensor) => Float32Array>,
+      required: true,
+    },
+    getPredictedClass: {
+      type: Function as PropType<(output: Float32Array) => number>,
+      required: true,
+    },
+  },
 
-  constructor() {
-    super();
-    this.input = new Float32Array(784);
-    this.output = new Float32Array(10);
-    this.outputClasses = _.range(10);
-    this.drawing = false;
-    this.strokes = [];
-    this.inferenceTime = 0;
-    this.modelLoading = true;
-    this.modelInitializing = true;
-    this.sessionRunning = false;
-    this.modelLoadingError = false;
-    this.sessionBackend = "webgl";
-    this.modelFile = new ArrayBuffer(0);
-    this.backendSelectList = [
+  setup(props){
+    let modelLoading = ref(true);
+    let modelInitializing = ref(true);
+    let modelLoadingError = ref(false);
+    let sessionRunning = ref(false);
+    let input: Float32Array = new Float32Array(784);
+    let output = ref(new Float32Array(10));
+    let outputClasses: number[] = _.range(10);
+    let drawing = ref(false);
+    let strokes: number[][][] = [];
+    let inferenceTime = ref(0);
+    let session: InferenceSession | undefined;
+    let gpuSession: InferenceSession | undefined;
+    let cpuSession: InferenceSession | undefined;
+    let sessionBackend = ref("webgl");
+    let modelFile: ArrayBuffer = new ArrayBuffer(0);
+    let backendSelectList: Array<{ text: string; value: string }> = [
       { text: "GPU-WebGL", value: "webgl" },
       { text: "CPU-WebAssembly", value: "wasm" },
     ];
-  }
 
-  async created() {
-    // fetch the model file to be used later
-    const response = await fetch(this.modelFilepath);
-    this.modelFile = await response.arrayBuffer();
-    try {
-      await this.initSession();
-    } catch (e) {
-      this.sessionBackend = "wasm";
-    }
-  }
+    init();
 
-  async initSession() {
-    this.sessionRunning = false;
-    this.modelLoadingError = false;
-    if (this.sessionBackend === "webgl") {
-      if (this.gpuSession) {
-        this.session = this.gpuSession;
-        return;
+    watch(sessionBackend, async (newVal: string): Promise<string> => {
+      sessionBackend.value = newVal;
+      clear();
+      try {
+        await initSession();
+      } catch (e) {
+        modelLoadingError.value = true;
       }
-      this.modelLoading = true;
-      this.modelInitializing = true;
-    }
-    if (this.sessionBackend === "wasm") {
-      if (this.cpuSession) {
-        this.session = this.cpuSession;
-        return;
-      }
-      this.modelLoading = true;
-      this.modelInitializing = true;
-    }
+      return newVal;
+    });
 
-    try {
-      if (this.sessionBackend === "webgl") {
-        this.gpuSession = await runModelUtils.createModelGpu(this.modelFile);
-        this.session = this.gpuSession;
-      } else if (this.sessionBackend === "wasm") {
-        this.cpuSession = await runModelUtils.createModelCpu(this.modelFile);
-        this.session = this.cpuSession;
+    async function init() {
+      console.log("init");
+      const response = await fetch(props.modelFilepath);
+      modelFile = await response.arrayBuffer();
+      try {
+        await initSession();
+      } catch (e) {
+        sessionBackend.value = "wasm";
       }
-    } catch (e) {
-      this.modelLoading = false;
-      this.modelInitializing = false;
-      if (this.sessionBackend === "webgl") {
-        this.gpuSession = undefined;
+    };
+
+    async function initSession() {
+      console.log("initSession");
+      sessionRunning.value = false;
+      modelLoadingError.value = false;
+      if (sessionBackend.value === "webgl") {
+        if (gpuSession) {
+          session = gpuSession;
+          return;
+        }
+        modelLoading.value = true;
+        modelInitializing.value = true;
+      }
+      if (sessionBackend.value === "wasm") {
+        if (cpuSession) {
+          session = cpuSession;
+          return;
+        }
+        modelLoading.value = true;
+        modelInitializing.value = true;
+      }
+
+      try {
+        if (sessionBackend.value === "webgl") {
+          gpuSession = await runModelUtils.createModelGpu(modelFile);
+          session = gpuSession;
+        } else if (sessionBackend.value === "wasm") {
+          cpuSession = await runModelUtils.createModelCpu(modelFile);
+          session = cpuSession;
+        }
+      } catch (e) {
+        modelLoading.value = false;
+        modelInitializing.value = false;
+        if (sessionBackend.value === "webgl") {
+          gpuSession = undefined;
+        } else {
+          cpuSession = undefined;
+        }
+        throw new Error("Error: Backend not supported. ");
+      }
+      modelLoading.value = false;
+      // warm up session with a sample tensor. Use setTimeout(..., 0) to make it an async execution so
+      // that UI update can be done.
+      if (sessionBackend.value === "webgl") {
+        setTimeout(() => {
+          runModelUtils.warmupModel(session!, [1, 1, 28, 28]);
+          modelInitializing.value = false;
+        }, 0);
       } else {
-        this.cpuSession = undefined;
+        await runModelUtils.warmupModel(session!, [1, 1, 28, 28]);
+        modelInitializing.value = false;
       }
-      throw new Error("Error: Backend not supported. ");
     }
-    this.modelLoading = false;
-    // warm up session with a sample tensor. Use setTimeout(..., 0) to make it an async execution so
-    // that UI update can be done.
-    if (this.sessionBackend === "webgl") {
-      setTimeout(() => {
-        runModelUtils.warmupModel(this.session!, [1, 1, 28, 28]);
-        this.modelInitializing = false;
-      }, 0);
-    } else {
-      await runModelUtils.warmupModel(this.session!, [1, 1, 28, 28]);
-      this.modelInitializing = false;
-    }
-  }
 
-  @Watch("sessionBackend")
-  async onSessionBackendChange(newVal: string) {
-    this.sessionBackend = newVal;
-    this.clear();
-    try {
-      await this.initSession();
-    } catch (e) {
-      this.modelLoadingError = true;
-    }
-    return newVal;
-  }
-
-  async run() {
-    if (!this.drawing) {
-      return;
-    }
-    this.drawing = false;
-    this.sessionRunning = true;
-    const ctx = (
-      document.getElementById("input-canvas") as HTMLCanvasElement
-    ).getContext("2d") as CanvasRenderingContext2D;
-    const tensor = this.preprocess(ctx);
-    const [res, time] = await runModelUtils.runModel(this.session, tensor);
-    this.output = this.postprocess(res);
-    this.inferenceTime = time;
-    this.sessionRunning = false;
-  }
-
-  get predictedClass() {
-    return this.getPredictedClass(this.output);
-  }
-
-  clear() {
-    const ctx = (
-      document.getElementById("input-canvas") as HTMLCanvasElement
-    ).getContext("2d") as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const ctxCenterCrop = (
-      document.getElementById("input-canvas-centercrop") as HTMLCanvasElement
-    ).getContext("2d") as CanvasRenderingContext2D;
-    ctxCenterCrop.clearRect(
-      0,
-      0,
-      ctxCenterCrop.canvas.width,
-      ctxCenterCrop.canvas.height
-    );
-    const ctxScaled = (
-      document.getElementById("input-canvas-scaled") as HTMLCanvasElement
-    ).getContext("2d") as CanvasRenderingContext2D;
-    ctxScaled.clearRect(0, 0, ctxScaled.canvas.width, ctxScaled.canvas.height);
-    this.output = new Float32Array(10);
-    this.drawing = false;
-    this.strokes = [];
-  }
-
-  activateDraw(e: any) {
-    if (this.modelLoading || this.modelInitializing || this.modelLoadingError) {
-      return;
-    }
-    this.drawing = true;
-    this.strokes.push([]);
-    const points = this.strokes[this.strokes.length - 1];
-    points.push(mathUtils.getCoordinates(e));
-    this.draw(e);
-  }
-
-  draw(e: any) {
-    if (!this.drawing) {
-      return;
-    }
-    // disable scrolling behavior when drawing
-    e.preventDefault();
-    const ctx = (
-      document.getElementById("input-canvas") as HTMLCanvasElement
-    ).getContext("2d") as CanvasRenderingContext2D;
-    ctx.lineWidth = 20;
-    ctx.lineJoin = ctx.lineCap = "round";
-    ctx.strokeStyle = "#393E46";
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    let points = this.strokes[this.strokes.length - 1];
-    points.push(mathUtils.getCoordinates(e));
-    // draw individual strokes
-    for (let s = 0, slen = this.strokes.length; s < slen; s++) {
-      points = this.strokes[s];
-      let p1 = points[0];
-      let p2 = points[1];
-      ctx.beginPath();
-      ctx.moveTo(p1[0], p1[1]);
-      // draw points in stroke
-      // quadratic bezier curve
-      for (let i = 1, len = points.length; i < len; i++) {
-        const midpoint = mathUtils.getMidpoint(p1, p2);
-        ctx.quadraticCurveTo(p1[0], p1[1], midpoint[0], midpoint[1]);
-        p1 = points[i];
-        p2 = points[i + 1];
+    async function run() {
+      console.log("run");
+      if (!drawing.value) {
+        return;
       }
-      ctx.lineTo(p1[0], p1[1]);
-      ctx.stroke();
+      drawing.value = false;
+      sessionRunning.value = true;
+      const ctx = (
+        document.getElementById("input-canvas") as HTMLCanvasElement
+      ).getContext("2d") as CanvasRenderingContext2D;
+      const tensor = props.preprocess(ctx);
+      const [res, time] = await runModelUtils.runModel(session!, tensor);
+      output.value = props.postprocess(res);
+      console.log(output.value);
+      inferenceTime.value = time;
+      sessionRunning.value = false;
+    }
+
+    function clear() {
+      const ctx = (
+        document.getElementById("input-canvas") as HTMLCanvasElement
+      ).getContext("2d") as CanvasRenderingContext2D;
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      const ctxCenterCrop = (
+        document.getElementById("input-canvas-centercrop") as HTMLCanvasElement
+      ).getContext("2d") as CanvasRenderingContext2D;
+      ctxCenterCrop.clearRect(
+        0,
+        0,
+        ctxCenterCrop.canvas.width,
+        ctxCenterCrop.canvas.height
+      );
+      const ctxScaled = (
+        document.getElementById("input-canvas-scaled") as HTMLCanvasElement
+      ).getContext("2d") as CanvasRenderingContext2D;
+      ctxScaled.clearRect(0, 0, ctxScaled.canvas.width, ctxScaled.canvas.height);
+      output.value = new Float32Array(10);
+      drawing.value = false;
+      strokes = [];
+    }
+
+    function draw(e: any) {
+      if (!drawing.value) {
+        return;
+      }
+      // disable scrolling behavior when drawing
+      e.preventDefault();
+      const ctx = (
+        document.getElementById("input-canvas") as HTMLCanvasElement
+      ).getContext("2d") as CanvasRenderingContext2D;
+      ctx.lineWidth = 20;
+      ctx.lineJoin = ctx.lineCap = "round";
+      ctx.strokeStyle = "#393E46";
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      let points = strokes[strokes.length - 1];
+      points.push(mathUtils.getCoordinates(e));
+      // draw individual strokes
+      for (let s = 0, slen = strokes.length; s < slen; s++) {
+        points = strokes[s];
+        let p1 = points[0];
+        let p2 = points[1];
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        // draw points in stroke
+        // quadratic bezier curve
+        for (let i = 1, len = points.length; i < len; i++) {
+          const midpoint = mathUtils.getMidpoint(p1, p2);
+          ctx.quadraticCurveTo(p1[0], p1[1], midpoint[0], midpoint[1]);
+          p1 = points[i];
+          p2 = points[i + 1];
+        }
+        ctx.lineTo(p1[0], p1[1]);
+        ctx.stroke();
+      }
+    }
+
+    function activateDraw(e: any) {
+      if (modelLoading.value ||  modelInitializing.value ||  modelLoadingError.value ) {
+        return;
+      }
+      drawing.value = true;
+      strokes.push([]);
+      const points = strokes[strokes.length - 1];
+      points.push(mathUtils.getCoordinates(e));
+      draw(e);
+    }
+
+    function predictedClass(): number {
+      return props.getPredictedClass(output.value);
+    }
+
+    return {
+      modelLoading,
+      modelInitializing,
+      modelLoadingError,
+      sessionRunning,
+      input,
+      output,
+      outputClasses,
+      drawing,
+      strokes,
+      inferenceTime,
+      session,
+      gpuSession,
+      cpuSession,
+      sessionBackend,
+      modelFile,
+      backendSelectList,
+      activateDraw,
+      run,
+      draw,
+      clear,
+      predictedClass,
     }
   }
-}
+});
 </script>
 
 <style scoped lang="postcss">

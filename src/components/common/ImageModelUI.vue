@@ -6,18 +6,21 @@
       :modelLoading="modelLoading"
       :modelInitializing="modelInitializing"
     ></model-status>
-    <v-container fluid>
+    <v-container fluid
+      style="margin-left: 20%; width: 60%; padding: 30px"
+    >
       <!-- Utility bar to select session backend configs. -->
       <v-layout
-        justify-center
         align-center
-        style="margin: auto; width: 40%; padding: 30px"
+        style="margin-left: 10%; width: 70%; padding: 30px"
       >
-        <div class="select-backend">Select Backend:</div>
+        <div class="select-backend" style="align-self: center;">Select Backend:</div>
         <v-select
           v-model="sessionBackend"
           :disabled="modelLoading || modelInitializing || sessionRunning"
           :items="backendSelectList"
+          item-title="text"
+          item-value="value"
           label="Switch Backend"
           :menu-props="{ maxHeight: '750' }"
           solo
@@ -35,14 +38,13 @@
           a different backend.
         </v-flex>
       </v-layout>
-
-      <v-layout row wrap justify-space-around class="image-panel elevation-1">
+      <v-layout row wrap justify-center class="image-panel elevation-1">
         <!-- model status -->
         <div v-if="imageLoading || sessionRunning" class="loading-indicator">
           <v-progress-circular indeterminate color="primary" />
         </div>
         <!-- select input images -->
-        <v-flex sm6 md4 align-center justify-start column fill-height>
+        <v-flex sm6 md4 align-center justify-center column fill-height>
           <v-layout align-center>
             <v-flex sm4>
               <v-select
@@ -51,6 +53,8 @@
                   modelLoading || modelInitializing || modelLoadingError
                 "
                 :items="imageURLSelectList"
+                item-title="text"
+                item-value="value"
                 label="Select image"
                 :menu-props="{ maxHeight: '750' }"
                 solo
@@ -58,7 +62,7 @@
                 hide-details
               ></v-select>
             </v-flex>
-            <v-flex class="text-xs-center">or</v-flex>
+            <v-flex class="text-xs-center"> or </v-flex>
             <label
               :disabled="modelLoading || modelInitializing || modelLoadingError"
               class="inputs"
@@ -104,26 +108,26 @@
             :key="i"
             class="output-class"
             :class="{
-              predicted: i === 0 && outputClasses[i].probability.toFixed(2) > 0,
+              predicted: i === 0 && outputClasses.value[i].probability > 0,
             }"
           >
-            <div class="output-label">{{ outputClasses[i].name }}</div>
+            <div class="output-label">{{ outputClasses.value[i].name }}</div>
             <div
               class="output-bar"
               :style="{
-                width: `${Math.round(180 * outputClasses[i].probability)}px`,
-                background: `rgba(42, 106, 150, ${outputClasses[
+                width: `${Math.round(180 * outputClasses.value[i].probability)}px`,
+                background: `rgba(42, 106, 150, ${outputClasses.value[
                   i
                 ].probability.toFixed(2)})`,
                 transition: `${
-                  outputClasses[i].probability != 0
+                  outputClasses.value[i].probability != 0
                     ? 'width 0.2s ease-out'
                     : 'null'
                 }`,
               }"
             ></div>
             <div class="output-value">
-              {{ Math.round(100 * outputClasses[i].probability) }}%
+              {{ Math.round(100 * outputClasses.value[i].probability) }}%
             </div>
           </div>
         </v-flex>
@@ -133,274 +137,317 @@
 </template>
 
 <script lang="ts">
+
 import loadImage from "blueimp-load-image";
 import { runModelUtils } from "../../utils";
+import type { ClassResult } from "../../utils/imagenet";
 
 import modelStatus from "./ModelStatus.vue";
-import { InferenceSession, Tensor } from "onnxruntime-web";
-import { Vue, Component, Prop, Watch } from "vue-property-decorator";
+import type { InferenceSession, Tensor } from "onnxruntime-web";
+import { watch, defineComponent, ref, reactive, nextTick } from "vue";
+import type { PropType } from "vue";
 
-@Component({
+export default defineComponent({
+  name:'ImageClassification',
+  props: {
+    modelFilepath: { type: String, required: true },
+    imageSize: { type: Number, required: true },
+    imageUrls: {
+      type: Array as PropType<Array<{ text: string; value: string }>>,
+      required: true,
+    },
+    preprocess: {
+      type: Function as PropType<(ctx: CanvasRenderingContext2D) => Tensor>,
+      required: true,
+    },
+    getPredictedClass: {
+      type: Function as PropType<(output: Float32Array) => ClassResult[]>,
+      required: true,
+    },
+  },
+
   components: {
     modelStatus,
   },
-})
-export default class ImageModelUI extends Vue {
-  @Prop({ type: String, required: true }) modelFilepath!: string;
-  @Prop({ type: Number, required: true }) imageSize!: number;
-  @Prop({ type: Array, required: true }) imageUrls!: Array<{
-    text: string;
-    value: string;
-  }>;
-  @Prop({ type: Function, required: true }) preprocess!: (
-    ctx: CanvasRenderingContext2D
-  ) => Tensor;
-  @Prop({ type: Function, required: true }) getPredictedClass!: (
-    output: Float32Array
-  ) => {};
 
-  sessionBackend: string;
-  backendSelectList: Array<{ text: string; value: string }>;
-  modelLoading: boolean;
-  modelInitializing: boolean;
-  modelLoadingError: boolean;
-  sessionRunning: boolean;
-  session: InferenceSession | undefined;
-  gpuSession: InferenceSession | undefined;
-  cpuSession: InferenceSession | undefined;
-
-  inferenceTime: number;
-  imageURLInput: string;
-  imageURLSelect: null;
-  imageURLSelectList: Array<{ text: string; value: string }>;
-  imageLoading: boolean;
-  imageLoadingError: boolean;
-  output: Tensor.DataType;
-  modelFile: ArrayBuffer;
-
-  constructor() {
-    super();
-    this.sessionBackend = "webgl";
-    this.backendSelectList = [
-      { text: "GPU-WebGL", value: "webgl" },
-      { text: "CPU-WebAssembly", value: "wasm" },
-    ];
-    this.modelLoading = true;
-    this.modelInitializing = true;
-    this.modelLoadingError = false;
-    this.sessionRunning = false;
-    this.inferenceTime = 0;
-    this.imageURLInput = "";
-    this.imageURLSelect = null;
-    this.imageURLSelectList = this.imageUrls;
-    this.imageLoading = false;
-    this.imageLoadingError = false;
-    this.output = [];
-    this.modelFile = new ArrayBuffer(0);
-  }
-
-  async created() {
-    // fetch the model file to be used later
-    const response = await fetch(this.modelFilepath);
-    this.modelFile = await response.arrayBuffer();
-    try {
-      await this.initSession();
-    } catch (e) {
-      this.sessionBackend = "wasm";
-    }
-  }
-
-  async initSession() {
-    this.sessionRunning = false;
-    this.modelLoadingError = false;
-    if (this.sessionBackend === "webgl") {
-      if (this.gpuSession) {
-        this.session = this.gpuSession;
-        return;
-      }
-      this.modelLoading = true;
-      this.modelInitializing = true;
-    }
-    if (this.sessionBackend === "wasm") {
-      if (this.cpuSession) {
-        this.session = this.cpuSession;
-        return;
-      }
-      this.modelLoading = true;
-      this.modelInitializing = true;
-    }
-
-    try {
-      if (this.sessionBackend === "webgl") {
-        this.gpuSession = await runModelUtils.createModelGpu(this.modelFile);
-        this.session = this.gpuSession;
-      } else if (this.sessionBackend === "wasm") {
-        this.cpuSession = await runModelUtils.createModelCpu(this.modelFile);
-        this.session = this.cpuSession;
-      }
-    } catch (e) {
-      this.modelLoading = false;
-      this.modelInitializing = false;
-      if (this.sessionBackend === "webgl") {
-        this.gpuSession = undefined;
-      } else {
-        this.cpuSession = undefined;
-      }
-      throw new Error("Error: Backend not supported. ");
-    }
-    this.modelLoading = false;
-    // warm up session with a sample tensor. Use setTimeout(..., 0) to make it an async execution so
-    // that UI update can be done.
-    if (this.sessionBackend === "webgl") {
-      setTimeout(() => {
-        runModelUtils.warmupModel(this.session!, [
-          1,
-          3,
-          this.imageSize,
-          this.imageSize,
-        ]);
-        this.modelInitializing = false;
-      }, 0);
-    } else {
-      await runModelUtils.warmupModel(this.session!, [
-        1,
-        3,
-        this.imageSize,
-        this.imageSize,
-      ]);
-      this.modelInitializing = false;
-    }
-  }
-
-  @Watch("sessionBackend")
-  async onSessionBackendChange(newVal: string) {
-    this.sessionBackend = newVal;
-    this.clearAll();
-    try {
-      await this.initSession();
-    } catch (e) {
-      this.modelLoadingError = true;
-    }
-    return newVal;
-  }
-
-  @Watch("imageURLSelect")
-  onImageURLSelectChange(newVal: string) {
-    this.imageURLInput = newVal;
-    this.loadImageToCanvas(newVal);
-  }
-
-  beforeDestroy() {
+  beforeMount() {
     this.session = undefined;
     this.gpuSession = undefined;
     this.cpuSession = undefined;
-  }
+  },
 
-  get outputClasses() {
-    return this.getPredictedClass(Array.prototype.slice.call(this.output));
-  }
+  setup(props, { emit }) {
+    let sessionBackend = ref("webgl");
+    let currentStatus = ref("Started setup function");
+    let backendSelectList: Array<{ text: string; value: string }> = 
+    [
+      { text: "GPU-WebGL", value: "webgl" },
+      { text: "CPU-WebAssembly", value: "wasm" },
+    ];
+    let modelLoading = ref(true);
+    let modelInitializing = ref(true);
+    let modelLoadingError = ref(false);
+    let sessionRunning = ref(false);
+    let session: InferenceSession | undefined;
+    let gpuSession: InferenceSession | undefined;
+    let cpuSession: InferenceSession | undefined;
 
-  onImageURLInputEnter(e: any) {
-    this.imageURLSelect = null;
-    this.loadImageToCanvas(e.target.value);
-  }
+    let inferenceTime = ref(0);
+    let imageURLInput: string = "";
+    const imageURLSelect = ref("" as string | null);
+    const imageURLSelectList = ref(props.imageUrls);
+    let imageLoading = ref(false);
+    let imageLoadingError = ref(false);
+    let output: Float32Array = new Float32Array(0);
+    let modelFile: ArrayBuffer = new ArrayBuffer(0);
+    let outputClasses = reactive(
+      {value: props.getPredictedClass(output) as ClassResult[]}
+    );
 
-  handleFileChange(e: any) {
-    this.$emit("input", e.target.files[0]);
-    this.loadImageToCanvas(e.target.files[0]);
-  }
+    async function initSession() {
+      currentStatus.value = "entered initSession function";
+      sessionRunning.value = false;
+      modelLoadingError.value = false;
+      if (sessionBackend.value === "webgl") {
+        if (gpuSession) {
+          session = gpuSession;
+          return;
+        }
+        modelLoading.value = true;
+        modelInitializing.value = true;
+      }
+      if (sessionBackend.value === "wasm") {
+        if (cpuSession) {
+          session = cpuSession;
+          return;
+        }
+        modelLoading.value = true;
+        modelInitializing.value = true;
+      }
+      currentStatus.value = "modelLoading -" + modelLoading.value + " - modelInitializing -" + modelInitializing.value + " - sessionBackend.value -" + sessionBackend.value;
 
-  loadImageToCanvas(url: string) {
-    if (!url) {
-      this.clearAll();
-      return;
-    }
-    this.imageLoading = true;
-    loadImage(
-      url,
-      (img) => {
-        if ((img as Event).type === "error") {
-          this.imageLoadingError = true;
-          this.imageLoading = false;
+      try {
+        if (sessionBackend.value === "webgl") {
+          currentStatus.value = "entered webgl session";
+          gpuSession = await runModelUtils.createModelGpu(modelFile);
+          session = gpuSession;
+          currentStatus.value = "webgl session set";
+        } else if (sessionBackend.value === "wasm") {
+          currentStatus.value = "entered wasm session";
+          console.log("entered wasm session");
+          cpuSession = await runModelUtils.createModelCpu(modelFile);
+          console.log("cpuSession - " + cpuSession);
+          session = cpuSession;
+          currentStatus.value = "wasm session set";
+        }
+      } catch (e) {
+        modelLoading.value = false;
+        modelInitializing.value = false;
+        if (sessionBackend.value === "webgl") {
+          gpuSession = undefined;
         } else {
-          // load image data onto input canvas
-          const element = document.getElementById(
-            "input-canvas"
-          ) as HTMLCanvasElement;
-          if (element) {
-            const ctx = element.getContext("2d");
-            if (ctx) {
-              ctx.drawImage(img as HTMLImageElement, 0, 0);
-              this.imageLoadingError = false;
-              this.imageLoading = false;
-              this.sessionRunning = true;
-              this.output = [];
-              this.inferenceTime = 0;
-              // session predict
-              this.$nextTick(function () {
-                setTimeout(() => {
-                  this.runModel();
-                }, 10);
-              });
+          cpuSession = undefined;
+        }
+        throw new Error("Error: Backend not supported. ");
+      }
+      modelLoading.value = false;
+      currentStatus.value = "session created";
+      // warm up session with a sample tensor. Use setTimeout(..., 0) to make it an async execution so
+      // that UI update can be done.
+      if (sessionBackend.value === "webgl") {
+        setTimeout(() => {
+          currentStatus.value = "session warming up - 1";
+          currentStatus.value = "model file -" + modelFile + " - sessionBackend.value -" + sessionBackend.value + " - file - " + props.modelFilepath;
+          runModelUtils.warmupModel(session!, [
+            1,
+            3,
+            props.imageSize,
+            props.imageSize,
+          ]);
+          modelInitializing.value = false;
+        }, 0);
+        currentStatus.value = "session warming up - 2";
+      } else {
+        await runModelUtils.warmupModel(session!, [
+          1,
+          3,
+          props.imageSize,
+          props.imageSize,
+        ]);
+        currentStatus.value = "session warmed up";
+        modelInitializing.value = false;
+      }
+    }
+
+    function loadImageToCanvas(url: string) {
+      if (!url) {
+        clearAll();
+        return;
+      }
+      imageLoading.value = true;
+      loadImage(
+        url,
+        (img: Event | HTMLImageElement | HTMLCanvasElement) => {
+          if ((img as Event).type === "error") {
+            imageLoadingError.value = true;
+            imageLoading.value = false;
+          } else {
+            // load image data onto input canvas
+            const element = document.getElementById(
+              "input-canvas"
+            ) as HTMLCanvasElement;
+            // console.log("loadImageToCanvas - element - " + element);
+            if (element) {
+              const ctx = element.getContext("2d");
+              // console.log("loadImageToCanvas - ctx - " + ctx);
+              if (ctx) {
+                ctx.drawImage(img as HTMLImageElement, 0, 0);
+                imageLoadingError.value = false;
+                imageLoading.value = false;
+                sessionRunning.value = true;
+                output = new Float32Array(0);
+                inferenceTime.value = 0;
+                // session predict
+                nextTick(() => {
+                  setTimeout(() => {
+                    runModel(ctx);
+                  }, 10);
+                });
+              }
             }
           }
+        },
+        {
+          maxWidth: props.imageSize,
+          maxHeight: props.imageSize,
+          cover: true,
+          crop: true,
+          canvas: true,
+          crossOrigin: "Anonymous",
         }
-      },
-      {
-        maxWidth: this.imageSize,
-        maxHeight: this.imageSize,
-        cover: true,
-        crop: true,
-        canvas: true,
-        crossOrigin: "Anonymous",
+      );
+    }
+
+    async function runModel(ctx: CanvasRenderingContext2D) {
+      const preprocessedData = props.preprocess(ctx);
+      let tensorOutput = null;
+      [tensorOutput, inferenceTime.value] = await runModelUtils.runModel(
+        session!,
+        preprocessedData
+      );
+      output = tensorOutput.data as Float32Array;
+      outputClasses.value = props.getPredictedClass(output);
+      sessionRunning.value = false;
+    }
+
+    function clearAll() {
+      sessionRunning.value = false;
+      inferenceTime.value = 0;
+      imageURLInput = "";
+      imageURLSelect.value = null;
+      imageLoading.value = false;
+      imageLoadingError.value = false;
+      output = new Float32Array(0);
+
+      const element = document.getElementById(
+        "input-canvas"
+      ) as HTMLCanvasElement;
+      if (element) {
+        const ctx = element.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
       }
-    );
-  }
 
-  async runModel() {
-    const element = document.getElementById(
-      "input-canvas"
-    ) as HTMLCanvasElement;
-    const ctx = element.getContext("2d") as CanvasRenderingContext2D;
-    const preprocessedData = this.preprocess(ctx);
-    let tensorOutput = null;
-    [tensorOutput, this.inferenceTime] = await runModelUtils.runModel(
-      this.session!,
-      preprocessedData
-    );
-    this.output = tensorOutput.data;
-    this.sessionRunning = false;
-  }
-
-  clearAll() {
-    this.sessionRunning = false;
-    this.inferenceTime = 0;
-    this.imageURLInput = "";
-    this.imageURLSelect = null;
-    this.imageLoading = false;
-    this.imageLoadingError = false;
-    this.output = [];
-
-    const element = document.getElementById(
-      "input-canvas"
-    ) as HTMLCanvasElement;
-    if (element) {
-      const ctx = element.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      const file = document.getElementById(
+        "input-upload-image"
+      ) as HTMLInputElement;
+      if (file) {
+        file.value = "";
       }
     }
 
-    const file = document.getElementById("input-upload-image") as HTMLInputElement;
-    if (file) {
-      file.value = '';
+    function onImageURLInputEnter(e: any) {
+      imageURLSelect.value = null;
+      loadImageToCanvas(e.target.value);
     }
-  }
-}
+
+    function handleFileChange(e: any) {
+      emit("input", e.target.files[0]);
+      loadImageToCanvas(e.target.files[0]);
+    }
+
+    watch(sessionBackend, async (newVal: string) => {
+      sessionBackend.value = newVal;
+      clearAll();
+      try {
+        await initSession();
+      } catch (e) {
+        modelLoadingError.value = true;
+      }
+      return newVal;
+    });
+
+    watch(imageURLSelect, (newVal: string | null) => {
+      if (newVal === null) return;
+      imageURLInput = newVal;
+      loadImageToCanvas(newVal);
+    });
+
+    async function setupSession() {
+      // fetch the model file to be used later
+      currentStatus.value = "Loading model file...";
+      const response = await fetch(props.modelFilepath);
+      currentStatus.value = "Model file loaded.";
+      modelFile = await response.arrayBuffer();
+      currentStatus.value = "generating model buffer";
+      try {
+        await initSession();
+      } catch (e) {
+        sessionBackend.value = "wasm";
+      }
+    }
+
+    setupSession();
+
+    return {
+      sessionBackend,
+      backendSelectList,
+      modelLoading,
+      modelInitializing,
+      modelLoadingError,
+      sessionRunning,
+      session,
+      gpuSession,
+      cpuSession,
+      inferenceTime,
+      imageURLInput,
+      imageURLSelect,
+      imageURLSelectList,
+      imageLoading,
+      imageLoadingError,
+      output,
+      modelFile,
+      handleFileChange,
+      onImageURLInputEnter,
+      outputClasses,
+      currentStatus,
+    };
+  },
+});
 </script>
 
 <style lang="postcss" scoped>
 @import "../../variables.css";
+
+.text-xs-center {
+  text-align: center;
+  white-space: nowrap;
+  font-family: var(--font-sans-serif);
+  font-size: 16px;
+  color: black;
+  padding: 10px 10px;
+}
 .image-panel {
   padding: 80px 0px 80px 0px;
   margin: auto;
@@ -505,7 +552,7 @@ export default class ImageModelUI extends Vue {
     }
 
     & .output-bar {
-      height: 16px;
+      height: 20px;
       transition: width 0.2s ease-out;
       color: var(--color-blue-light);
     }

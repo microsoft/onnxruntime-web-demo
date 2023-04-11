@@ -1,6 +1,5 @@
 import ndarray from 'ndarray';
-
-import {NumberDataType, Type} from './yoloPostprocess';
+import type { NumberDataType, Type } from "./yoloPostprocess";
 
 export class BroadcastUtil {
   /**
@@ -10,7 +9,11 @@ export class BroadcastUtil {
    * @param isMatMul Whether the operation is MatMul
    * @returns The expected shape of the result, or undefined if N/A
    */
-  static calcShape(adims: ReadonlyArray<number>, bdims: ReadonlyArray<number>, isMatMul = false): number[]|undefined {
+  static calcShape(
+    adims: ReadonlyArray<number>,
+    bdims: ReadonlyArray<number>,
+    isMatMul = false
+  ): number[] | undefined {
     const arank = adims.length;
     const brank = bdims.length;
     const crank = Math.max(adims.length, bdims.length);

@@ -2,13 +2,13 @@
   <div id="app">
     <v-app>
       <v-navigation-drawer v-model="showNav" absolute fixed floating app>
-        <main-menu :currentView="currentView"></main-menu>
+        <main-menu :currentView="currentView()"></main-menu>
       </v-navigation-drawer>
       <v-toolbar app dark flat color="primary">
         <v-toolbar-side-icon
           @click.stop="showNav = !showNav"
         ></v-toolbar-side-icon>
-        <v-toolbar-title>{{ currentTitle }}</v-toolbar-title>
+        <v-toolbar-title>{{ currentTitle() }}</v-toolbar-title>
         <v-spacer></v-spacer>
       </v-toolbar>
 
@@ -22,16 +22,18 @@
           <div class="demo">
             <div class="ui-container">
               <router-view :hasWebGL="hasWebGL"></router-view>
-              <v-layout
+              <v-layout column align-center fill-height class="footer-label">
+                {{ currentDescription() }}
+              </v-layout>
+              <a
                 column
-                justify-center
                 align-center
                 fill-height
-                class="footer-label"
+                target="_blank"
+                class="model-link"
+                :href="currentLink()"
+                >{{ currentLink() }}</a
               >
-                {{ currentDescription }}
-                <a target="_blank" :href="currentLink">{{ currentLink }}</a>
-              </v-layout>
             </div>
           </div>
         </v-container>
@@ -47,52 +49,61 @@ import {
   DEMO_DESCRIPTIONS,
   DEMO_MODEL_LINKS,
 } from "./data/demo-titles";
-import Component from "vue-class-component";
-import Vue from "vue";
 
-@Component({
+import { defineComponent } from "vue";
+import { useRouter } from "vue-router";
+
+export default defineComponent({
   components: { MainMenu },
-})
-export default class App extends Vue {
-  showNav: boolean;
-  hasWebGL: boolean;
+  setup() {
+    let showNav: boolean = false;
+    let hasWebGL: boolean = true;
 
-  constructor() {
-    super();
-    this.showNav = false;
-    this.hasWebGL = true;
-  }
+    const $route = useRouter();
 
-  get currentView() {
-    const path = this.$route.path;
-    return path.replace(/^\//, "") || "home";
-  }
+    function currentView() {
+      const path = $route.currentRoute.value.path;
+      console.log(path);
+      return path.replace(/^\//, "") || "home";
+    }
 
-  get currentTitle() {
-    const title = DEMO_TITLES[this.currentView];
-    if (title) {
-      return title;
-    } else {
-      return "ONNX Runtime Web";
+    function currentTitle() {
+      const title = DEMO_TITLES[currentView()];
+      if (title) {
+        return title;
+      } else {
+        return "ONNX Runtime Web";
+      }
     }
-  }
-  get currentDescription() {
-    const description = DEMO_DESCRIPTIONS[this.currentView];
-    if (description) {
-      return description;
-    } else {
-      return "";
+
+    function currentDescription() {
+      const description = DEMO_DESCRIPTIONS[currentView()];
+      if (description) {
+        return description;
+      } else {
+        return "";
+      }
     }
-  }
-  get currentLink() {
-    const link = DEMO_MODEL_LINKS[this.currentView];
-    if (link) {
-      return link;
-    } else {
-      return "";
+
+    function currentLink() {
+      const link = DEMO_MODEL_LINKS[currentView()];
+      if (link) {
+        return link;
+      } else {
+        return "";
+      }
     }
-  }
-}
+
+    return {
+      showNav,
+      hasWebGL,
+      currentView,
+      currentTitle,
+      currentDescription,
+      currentLink,
+    };
+  },
+});
 </script>
 
 <style lang="postcss">
@@ -114,11 +125,23 @@ footer {
 
 .footer-label {
   font-family: var(--font-sans-serif);
-  font-size: 16px;
+  font-size: 10px;
   color: var(--color-lightgray);
-  text-align: left;
+  text-align: center;
   user-select: none;
   cursor: default;
+  width: 40%;
+  margin: 0 25% 0 25%;
+}
+
+.model-link {
+  font-family: var(--font-sans-serif);
+  font-size: 10px;
+  text-align: center;
+  user-select: none;
+  cursor: default;
+  width: 40%;
+  margin: 0 25% 0 25%;
 }
 
 a {

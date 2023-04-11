@@ -1,7 +1,10 @@
-
-import {Tensor} from 'onnxruntime-web';
-import {NumberDataType} from './yoloPostprocess';
-import {arrayCopyHelper, ShapeUtil, TypedArrayUtil} from './yoloPostprocessUtils';
+import { Tensor } from "onnxruntime-web";
+import type { NumberDataType } from "./yoloPostprocess";
+import {
+  arrayCopyHelper,
+  ShapeUtil,
+  TypedArrayUtil,
+} from "./yoloPostprocessUtils";
 
 export function transpose(x: Tensor, perm?: number[]): Tensor {
   const inputDims = x.dims ? x.dims : [x.data.length];

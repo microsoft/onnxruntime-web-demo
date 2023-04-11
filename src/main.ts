@@ -1,17 +1,37 @@
-import '@babel/polyfill';
-import 'whatwg-fetch';
-import 'vuetify/dist/vuetify.min.css';
+import { createApp } from "vue";
+import App from "./App.vue";
+import router from "./router";
 
-import Vue from 'vue';
-import Vuetify from 'vuetify';
+// Vuetify
+import "vuetify/styles";
+import { createVuetify } from "vuetify";
+import type { ThemeDefinition } from "vuetify";
+import * as components from "vuetify/components";
+import * as directives from "vuetify/directives";
 
-import App from './App.vue';
-import router from './router';
+const myCustomLightTheme: ThemeDefinition = {
+    dark: false,
+    colors: {
+    primary: "#2a6a96",
+    secondary: "#69707a",
+    accent: "#f5d76e",
+    error: "#d24d57",
+    },
+};
 
-Vue.config.productionTip = false;
-Vue.use(Vuetify, {theme: {primary: '#2a6a96', secondary: '#69707a', accent: '#f5d76e', error: '#d24d57'}});
+const vuetify = createVuetify({
+  components,
+  directives,
+  theme: {
+    defaultTheme: "myCustomLightTheme",
+    themes: {
+      myCustomLightTheme,
+    }
+  }
+});
 
-new Vue({
-  router,
-  render: (h) => h(App),
-}).$mount('#app');
+const app = createApp(App);
+
+app.use(router).use(vuetify);
+
+app.mount("#app");

@@ -143,7 +143,10 @@ export function yolo_boxes_to_corners(boxXy: Tensor, boxWh: Tensor) {
  * @param {Number} iouThreshold IoU cutoff to filter overlapping boxes
  */
 export function non_max_suppression(
-    boxes: Float32Array|Int32Array|Uint8Array, scores: Float32Array|Int32Array|Uint8Array, iouThreshold: number) {
+  boxes: Float32Array | Int32Array | Uint8Array,
+  scores: Float32Array | Int32Array | Uint8Array,
+  iouThreshold: number
+) {
   // Zip together scores, box corners, and index
   const zipped = [];
   for (let i = 0; i < scores.length; i++) {
@@ -154,7 +157,10 @@ export function non_max_suppression(
     ]);
   }
   // Sort by descending order of scores (first index of zipped array)
-  const sortedBoxes = zipped.sort((a: number[], b: number[]) => b[0] - a[0]);
+  const sortedBoxes = zipped.sort(
+    (a: (number | number[])[], b: (number | number[])[]) =>
+      (b[0] as number) - (a[0] as number)
+  );
 
   const selectedBoxes: any[] = [];
 

@@ -43,7 +43,9 @@
 </template>
 
 <script scoped lang='ts'>
-import { Vue, Component, Prop } from "vue-property-decorator";
+
+import { defineComponent } from "vue";
+
 const DEMO_INFO = [
   {
     model: "MobileNet",
@@ -51,28 +53,41 @@ const DEMO_INFO = [
     path: "mobilenet",
   },
   {
-    model: "SqueezeNet",
+    model: "squeezenet",
     title: "SqueezeNet, trained on ImageNet",
     path: "squeezenet",
   },
   {
-    model: "Emotion FerPlus",
-    title: "Emotion FerPlus",
-    path: "emotion_ferplus",
+    model: "mnist",
+    title: "MNIST",
+    path: "mnist",
   },
-  { model: "Yolo", title: "Yolo", path: "yolo" },
-  { model: "MNIST", title: "MNIST", path: "mnist" },
+  {
+    model: "YoLo",
+    title: "YoLo",
+    path: "YoLo",
+  },
+  {
+    model: "Emotion Recognition",
+    title: "Emotion Recognition",
+    path: "emotion",
+  }
 ];
 
-@Component
-export default class MainMenu extends Vue {
-  @Prop({ default: "home" }) currentView: string;
-  demoInfo: Array<{ model: string; title: string; path: string }> = DEMO_INFO;
-  constructor() {
-    super();
-    this.demoInfo = DEMO_INFO;
-  }
-}
+// @Component
+// export default class MainMenu extends Vue {
+export default defineComponent({
+  name: 'MainMenu',
+  props: {
+    currentView: { type: String, required: true, default: "home" },
+  },
+  setup(props) {
+    let demoInfo: Array<{ model: string; title: string; path: string }> = DEMO_INFO;
+    return{
+      demoInfo
+    };
+  },
+});
 </script>
 
 <style lang="postcss">
