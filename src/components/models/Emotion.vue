@@ -26,7 +26,7 @@ import { Tensor, InferenceSession } from "onnxruntime-web";
 import { softmax } from "../../utils/math";
 
 const MODEL_FILEPATH =
-  "..\\src\\assets\\Models\\emotion.onnx";
+  "/assets/Models/emotion.onnx";
 
 // export default class WebcamModelUI extends Vue {
 export default defineComponent({

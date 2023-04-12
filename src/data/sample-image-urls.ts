@@ -107,24 +107,30 @@ export const SQUEEZENET_IMAGE_URLS = [
 ];
 
 export const EMOTION_IMAGE_URLS = [
-  { text: "happy girl", value: "./src/assets/EmotionSampleImages/happy.jpg" },
-  { text: "angry man", value: "./src/assets/EmotionSampleImages/angry_man.jpg" },
-  { text: "angry baby", value: "./src/assets/EmotionSampleImages/angry_baby.jpg" },
+  { text: "happy girl", value: "/assets/EmotionSampleImages/happy.jpg" },
+  {
+    text: "angry man",
+    value: "/assets/EmotionSampleImages/angry_man.jpg",
+  },
+  {
+    text: "angry baby",
+    value: "/assets/EmotionSampleImages/angry_baby.jpg",
+  },
   {
     text: "suprised boy",
-    value: "./src/assets/EmotionSampleImages/surprised_boy.jpg",
+    value: "/assets/EmotionSampleImages/surprised_boy.jpg",
   },
   {
     text: "suprised woman",
-    value: "./src/assets/EmotionSampleImages/surprised_woman.jpg",
+    value: "/assets/EmotionSampleImages/surprised_woman.jpg",
   },
-  { text: "sad baby", value: "./src/assets/EmotionSampleImages/sad_baby.jpg" },
-  { text: "sad baby 2", value: "./src/assets/EmotionSampleImages/sad_baby2.jpg" },
-  { text: "fear", value: "./src/assets/EmotionSampleImages/fear.jpg" },
-  { text: "neutral girl", value: "./src/assets/EmotionSampleImages/neutral.jpg" },
+  { text: "sad baby", value: "/assets/EmotionSampleImages/sad_baby.jpg" },
+  { text: "sad baby 2", value: "/assets/EmotionSampleImages/sad_baby2.jpg" },
+  { text: "fear", value: "/assets/EmotionSampleImages/fear.jpg" },
+  { text: "neutral girl", value: "/assets/EmotionSampleImages/neutral.jpg" },
   {
     text: "neutral girl 2",
-    value: "./src/assets/EmotionSampleImages/neutral_girl.jpg",
+    value: "/assets/EmotionSampleImages/neutral_girl.jpg",
   },
 ];
 

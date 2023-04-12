@@ -31,27 +31,27 @@ const DEMO_INFO = [
   {
     title: "MobileNet, trained on ImageNet",
     path: "mobilenet",
-    imagePath: "./src/assets/mobilenet.png",
+    imagePath: "/assets/mobilenet.png",
   },
   {
     title: "SqueezeNet, trained on ImageNet",
     path: "squeezenet",
-    imagePath: "./src/assets/squeezenet.png",
+    imagePath: "/assets/squeezenet.png",
   },
   {
     title: "MNIST",
     path: "MNIST",
-    imagePath: "./src/assets/mnist.png",
+    imagePath: "/assets/mnist.png",
   },
   {
     title: "YoLo",
     path: "YoLo",
-    imagePath: "./src/assets/yolo.png",
+    imagePath: "/assets/yolo.png",
   },
   {
     title: "Emotion Recognition",
     path: "emotion",
-    imagePath: "./src/assets/emotion.png",
+    imagePath: "/assets/emotion.png",
   },
 ];
 
@@ -62,7 +62,7 @@ export default defineComponent({
       DEMO_INFO;
     
     function getImageSource(): string{
-      return '/src/assets/background.png';
+      return '/assets/background.png';
     };
 
     return {

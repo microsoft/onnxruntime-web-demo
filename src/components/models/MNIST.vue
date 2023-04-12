@@ -22,7 +22,7 @@ import { Tensor } from "onnxruntime-web";
 import { mathUtils } from "../../utils";
 import { defineComponent } from "vue";
 
-const MODEL_FILEPATH = "..\\src\\assets\\Models\\mnist.onnx";
+const MODEL_FILEPATH = "/assets/Models/mnist.onnx";
 
 export default defineComponent({
 

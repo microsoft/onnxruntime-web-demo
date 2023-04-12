@@ -20,7 +20,7 @@ import { imagenetUtils, mathUtils } from "../../utils/index";
 import { defineComponent } from "vue";
 // import type { PropType } from "vue";
 
-const MODEL_FILEPATH = "..\\src\\assets\\Models\\mobilenetv2-7.onnx";
+const MODEL_FILEPATH = "/assets/Models/mobilenetv2-7.onnx";
 
 export default defineComponent({
   name: "MobileNet",

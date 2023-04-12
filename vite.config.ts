@@ -7,6 +7,7 @@ import path from "path"
 
 const srcFolder = path.join(__dirname, 'node_modules', 'onnxruntime-web', 'dist');
 const destFolder = path.join(__dirname, 'public');
+const assetFolder = path.join(__dirname, 'src', 'assets');
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -33,7 +34,11 @@ export default defineConfig({
         {
           src: normalizePath(path.join(srcFolder, 'ort.min.js')),
           dest: normalizePath(path.join(destFolder))
-        }
+        },
+        {
+          src: normalizePath(path.join(assetFolder)),
+          dest: normalizePath(path.join(destFolder))
+        },
       ]
     })
   ],
